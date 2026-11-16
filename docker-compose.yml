@@ -1,6 +1,6 @@
 services:
   xh-panel:
-    image: ghcr.io/laozixh/xh-panel:v2.04
+    image: ghcr.io/laozixh/xh-panel:latest
     container_name: xh-panel
     volumes:
       - ./data:/data

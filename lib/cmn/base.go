@@ -111,7 +111,7 @@ func StrToUint(s string) uint {
 // 获取系统信息
 func GetSysVersionInfo() Version_Info {
 	cBytes, _ := assets.Asset("assets/version")
-	c := string(cBytes)
+	c := strings.TrimSpace(string(cBytes))
 	info := strings.Split(c, "|")
 
 	return Version_Info{
