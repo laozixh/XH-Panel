@@ -63,6 +63,10 @@ docker run -d --name xh-panel --restart=unless-stopped \
 
 > 说明：Docker 镜像只使用 `latest`。`/root/xh-data` 会持久化 `conf`、`database`、`uploads`、`runtime`，升级时保留这个目录即可无损升级。
 
+> ⚠️ **务必把宿主机目录挂到 `/data`**。数据库、上传的图标和日志都写在 `/data` 下；如果没挂载，它们会留在容器可写层里，容器一重建（升级、改配置）就会全部丢失，启动后只剩镜像自带的示例数据。
+>
+> 只挂载 `/app/conf`（某些一键部署脚本的默认写法）也不会丢数据：程序会自动把数据库放到 `<挂载的 conf>/.xh-data/` 里。但更推荐直接挂 `/data`。
+
 升级：
 
 ```bash

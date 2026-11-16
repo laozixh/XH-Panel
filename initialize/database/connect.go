@@ -83,6 +83,10 @@ func (d *SQLiteConfig) Connect() (db *gorm.DB, err error) {
 				log.Println("seed db copy failed:", errCopy)
 			}
 		}
+	} else {
+		// The database already exists: keep a rolling copy before opening it so
+		// a bad upgrade or a corrupted write can always be rolled back.
+		BackupSQLite(filePath)
 	}
 
 	exists := false
