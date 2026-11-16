@@ -1,0 +1,9 @@
+services:
+  xh-panel:
+    image: ghcr.io/laozixh/xh-panel:v2.04
+    container_name: xh-panel
+    volumes:
+      - ./data:/data
+    ports:
+      - "3005:3005"
+    restart: unless-stopped

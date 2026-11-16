@@ -1,0 +1,63 @@
+# build backend
+# 最新alpine3.19导致sqlite3编译失败(https://github.com/mattn/go-sqlite3/issues/1164，
+# 临时解决方案:https://github.com/mattn/go-sqlite3/pull/1177)
+# sun-panel暂时解决方案使用golang:1.21-alpine3.18（因旧版本使用没问题，短期内较稳定） 
+FROM golang:1.21-alpine3.18 as server_image
+
+WORKDIR /build
+
+# 仅复制 Go 后端相关目录（Go 项目已上移到仓库根目录）
+COPY ./go.mod ./go.sum ./main.go ./
+COPY ./api ./api
+COPY ./assets ./assets
+COPY ./conf ./conf
+COPY ./global ./global
+COPY ./initialize ./initialize
+COPY ./lang ./lang
+COPY ./lib ./lib
+COPY ./models ./models
+COPY ./router ./router
+COPY ./runtime ./runtime
+COPY ./structs ./structs
+
+# 中国国内源
+# RUN sed -i "s@dl-cdn.alpinelinux.org@mirrors.aliyun.com@g" /etc/apk/repositories \
+#     && go env -w GOPROXY=https://goproxy.cn,direct
+
+RUN apk add --no-cache bash curl gcc git musl-dev
+
+RUN go env -w GO111MODULE=on \
+    && go build -o xh-panel --ldflags="-X sun-panel/global.RUNCODE=release -X sun-panel/global.ISDOCKER=docker" ./main.go
+
+
+# run_image
+FROM alpine
+
+WORKDIR /app
+
+# Publish the current live web bundle from dist/ so Docker matches localhost:3005.
+COPY ./dist /app/web
+
+COPY --from=server_image /build/xh-panel /app/xh-panel
+
+# Seed template (db + uploads + conf) shipped with image
+COPY ./seed /app/seed
+
+# Entrypoint prepares /data and symlinks /app/{conf,database,uploads,runtime} -> /data/*
+COPY ./docker/entrypoint.sh /entrypoint.sh
+
+# 中国国内源
+# RUN sed -i "s@dl-cdn.alpinelinux.org@mirrors.aliyun.com@g" /etc/apk/repositories
+
+EXPOSE 3005
+
+RUN apk add --no-cache bash ca-certificates su-exec tzdata \
+    && chmod +x /app/xh-panel /entrypoint.sh \
+    && test -f /app/xh-panel \
+    && /app/xh-panel -config \
+    && mkdir -p /app/defaults \
+    && rm -rf /app/defaults/conf \
+    && mv /app/conf /app/defaults/conf
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/app/xh-panel"]

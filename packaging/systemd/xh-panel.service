@@ -1,0 +1,17 @@
+[Unit]
+Description=XH-Panel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=xh-panel
+Group=xh-panel
+WorkingDirectory=/opt/xh-panel
+ExecStart=/opt/xh-panel/xh-panel
+Restart=always
+RestartSec=2
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
