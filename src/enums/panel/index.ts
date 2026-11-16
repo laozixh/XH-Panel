@@ -3,6 +3,8 @@ export enum PanelStateNetworkModeEnum {
   'lan' = 0,
   // 互联网
   'wan' = 1,
+  // 自动（在局域网内优先使用内网地址，在公网访问时使用外网地址）
+  'auto' = 2,
 }
 
 export enum PanelPanelConfigStyleEnum {

@@ -220,7 +220,7 @@
     "inputIconName": "Enter icon name",
     "inputIconUrlOrUpload": "Enter icon URL or upload",
     "lanUrl": "LAN URL",
-    "lanUrlInputPlaceholder": "http(s):// (LAN mode, will redirect to this address)",
+    "lanUrlInputPlaceholder": "http(s):// (used first in LAN mode or auto mode)",
     "newWindowOpen": "Open in new window",
     "onlineIcon": "Online icon",
     "onlineIconLibrary": "Online icon library",
@@ -235,6 +235,8 @@
     "welcomeMessage": "Welcome back!"
   },
   "panelHome": {
+    "changeToAutoModel": "Switch to auto mode",
+    "changeToAutoModelSuccess": "Switched to auto mode (LAN URLs open first inside your local network)",
     "changeToLanModel": "Switch to LAN mode",
     "changeToLanModelSuccess": "Switched to LAN mode (mode status saved locally)",
     "changeToWanModel": "Switch to WAN mode",

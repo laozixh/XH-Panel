@@ -9,6 +9,7 @@ import { deletes, edit, getListByGroupId, saveSort } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 
 import { setTitle, updateLocalUserInfo } from '@/utils/cmn'
+import { resolveNetworkUrl } from '@/utils/network'
 import { useAuthStore, usePanelState } from '@/store'
 import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
@@ -117,14 +118,7 @@ function handleItemClick(itemGroupIndex: number, item: Panel.ItemInfo) {
     return
   }
 
-  let jumpUrl = ''
-
-  if (item)
-    jumpUrl = (panelState.networkMode === PanelStateNetworkModeEnum.lan ? item.lanUrl : item.url) as string
-  if (item.lanUrl === '')
-    jumpUrl = item.url
-
-  openPage(item.openMethod, jumpUrl, item.title)
+  openPage(item.openMethod, resolveNetworkUrl(item, panelState.networkMode), item.title)
 }
 
 function handWindowIframeIdLoad(payload: Event) {
@@ -162,32 +156,30 @@ function updateItemIconGroupByNet(itemIconGroupIndex: number, itemIconGroupId: n
 
 function handleRightMenuSelect(key: string | number) {
   dropdownShow.value = false
-  // console.log(currentRightSelectItem, key)
-  let jumpUrl = panelState.networkMode === PanelStateNetworkModeEnum.lan ? currentRightSelectItem.value?.lanUrl : currentRightSelectItem.value?.url
-  if (currentRightSelectItem.value?.lanUrl === '')
-    jumpUrl = currentRightSelectItem.value.url
+  const item = currentRightSelectItem.value
+  const jumpUrl = resolveNetworkUrl(item, panelState.networkMode)
   switch (key) {
     case 'newWindows':
       window.open(jumpUrl)
       break
     case 'copyUrl':
-      if (currentRightSelectItem.value?.url) {
-        copyUrlToClipboard(currentRightSelectItem.value.url)
+      if (item?.url) {
+        copyUrlToClipboard(item.url)
       }
       break
     case 'copyLanUrl':
     case 'copyWanUrl':
-      if (currentRightSelectItem.value?.lanUrl) {
-        copyUrlToClipboard(currentRightSelectItem.value.lanUrl)
+      if (item?.lanUrl) {
+        copyUrlToClipboard(item.lanUrl)
       }
       break
     case 'openWanUrl':
-      if (currentRightSelectItem.value)
-        openPage(currentRightSelectItem.value?.openMethod, currentRightSelectItem.value?.url, currentRightSelectItem.value?.title)
+      if (item)
+        openPage(item.openMethod, item.url, item.title)
       break
     case 'openLanUrl':
-      if (currentRightSelectItem.value && currentRightSelectItem.value.lanUrl)
-        openPage(currentRightSelectItem.value?.openMethod, currentRightSelectItem.value.lanUrl, currentRightSelectItem.value?.title)
+      if (item && item.lanUrl)
+        openPage(item.openMethod, item.lanUrl, item.title)
       break
     case 'edit':
       // 这里有个奇怪的问题，如果不使用{...}的方式 父组件的值会同步修改 标记一下
@@ -410,8 +402,11 @@ function handleChangeNetwork(mode: PanelStateNetworkModeEnum) {
   if (mode === PanelStateNetworkModeEnum.lan)
     ms.success(t('panelHome.changeToLanModelSuccess'))
 
-  else
+  else if (mode === PanelStateNetworkModeEnum.wan)
     ms.success(t('panelHome.changeToWanModelSuccess'))
+
+  else
+    ms.success(t('panelHome.changeToAutoModelSuccess'))
 }
 
 // 结束拖拽
@@ -471,7 +466,9 @@ function getDropdownMenuOptions() {
     key: 'copyUrl',
   })
 
-  if (currentRightSelectItem.value?.lanUrl && panelState.networkMode === PanelStateNetworkModeEnum.wan) {
+  const hasLanUrl = !!currentRightSelectItem.value?.lanUrl
+
+  if (hasLanUrl && panelState.networkMode !== PanelStateNetworkModeEnum.lan) {
     dropdownMenuOptions.push({
       label: () => renderIconLabel('打开内网链接', 'material-symbols:lan-outline-rounded'),
       key: 'openLanUrl',
@@ -483,7 +480,7 @@ function getDropdownMenuOptions() {
     })
   }
 
-  if (currentRightSelectItem.value?.lanUrl && panelState.networkMode === PanelStateNetworkModeEnum.lan) {
+  if (hasLanUrl && panelState.networkMode !== PanelStateNetworkModeEnum.wan) {
     dropdownMenuOptions.push({
       label: () => renderIconLabel('打开外网链接', 'mdi:wan'),
       key: 'openWanUrl',
@@ -960,10 +957,19 @@ function getGroupDotTop(groupId?: number) {
 
         <NButton
           v-if="panelState.networkMode === PanelStateNetworkModeEnum.wan && panelState.panelConfig.netModeChangeButtonShow" color="#2a2a2a6b"
-          :title="t('panelHome.changeToLanModel')" @click="handleChangeNetwork(PanelStateNetworkModeEnum.lan)"
+          :title="t('panelHome.changeToAutoModel')" @click="handleChangeNetwork(PanelStateNetworkModeEnum.auto)"
         >
           <template #icon>
             <SvgIcon class="text-white font-xl" icon="mdi:wan" />
+          </template>
+        </NButton>
+
+        <NButton
+          v-if="panelState.networkMode === PanelStateNetworkModeEnum.auto && panelState.panelConfig.netModeChangeButtonShow" color="#2a2a2a6b"
+          :title="t('panelHome.changeToLanModel')" @click="handleChangeNetwork(PanelStateNetworkModeEnum.lan)"
+        >
+          <template #icon>
+            <SvgIcon class="text-white font-xl" icon="material-symbols:autorenew" />
           </template>
         </NButton>
 
