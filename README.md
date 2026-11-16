@@ -94,7 +94,7 @@ docker run -d --name xh-panel --restart=unless-stopped \
 
 ## ❤️ 感谢
 
-- 本项目基于 [Sun-Panel v1.3.0 开源版](https://github.com/hslr-s/sun-panel) 项目做的二次开发，感谢原作者辛勤付出！
+- 本项目基于 [Sun-Panel v1.3.0 开源版](https://github.com/hslr-s/sun-panel),[AnGe-Panel ](https://github.com/liandu2024/AnGe-Panel)项目做的二次开发，感谢原作者辛勤付出！
 
 ---
 
