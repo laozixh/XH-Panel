@@ -13,6 +13,8 @@ func getDefaultConfig() map[string]map[string]string {
 			"http_port":        "3005",
 			"source_path":      "./uploads",      // 存放文件的路径
 			"source_temp_path": "./runtime/temp", // 存放文件的缓存路径
+			// 站点自身拿不到图标时，是否退而使用公共图标服务（1 开启 / 0 关闭）
+			"favicon_third_party": "1",
 		},
 		"sqlite": {
 			"file_path": "./database/database.db",

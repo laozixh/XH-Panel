@@ -3,6 +3,8 @@ package siteFavicon
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -23,6 +25,8 @@ import (
 const (
 	// 单次 HTTP 请求超时
 	requestTimeout = 8 * time.Second
+	// 内网地址的超时：不可达时快速失败，避免用户干等
+	localRequestTimeout = 4 * time.Second
 	// 整个图标获取流程的总超时
 	fetchTimeout = 20 * time.Second
 	// 页面最多读取多少字节用于解析 <link rel="icon">
@@ -40,7 +44,25 @@ var ErrFaviconNotFound = errors.New("favicon not found")
 var defaultFaviconPaths = []string{
 	"/favicon.ico",
 	"/favicon.png",
+	"/favicon.svg",
 	"/apple-touch-icon.png",
+	"/apple-touch-icon-precomposed.png",
+}
+
+// ThirdPartyFallback 控制是否在站点自身完全拿不到图标时，
+// 退而使用公共图标服务（默认开启）。可在 conf.ini 的
+// [base] favicon_third_party=0 关闭。
+var ThirdPartyFallback = true
+
+// thirdPartyIconProviders 是最后的兜底来源，按顺序尝试。
+// 仅在页面、默认路径全部失败时使用，正常情况下不会请求到外网第三方。
+var thirdPartyIconProviders = []func(host string) string{
+	func(host string) string {
+		return "https://www.google.com/s2/favicons?domain=" + url.QueryEscape(host) + "&sz=128"
+	},
+	func(host string) string {
+		return "https://icons.duckduckgo.com/ip3/" + url.QueryEscape(host) + ".ico"
+	},
 }
 
 // 允许保存的图标扩展名（与后台上传白名单保持一致）
@@ -125,6 +147,84 @@ func newHTTPClient() *http.Client {
 	return &http.Client{Timeout: requestTimeout}
 }
 
+// newInsecureHTTPClient 用于内网自签名证书的 HTTPS 服务（NAS 常见）
+func newInsecureHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout: localRequestTimeout,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // 内网自签名证书
+		},
+	}
+}
+
+// clientFor 对局域网地址放宽证书校验并缩短超时（内网不通时快速失败），
+// 其余走正常校验。
+func clientFor(rawURL string) *http.Client {
+	if u, err := url.Parse(rawURL); err == nil && isLikelyLocalHost(u.Host) {
+		return newInsecureHTTPClient()
+	}
+	return newHTTPClient()
+}
+
+// ClientForURL 供外部抓取页面时复用同一套超时/证书策略：
+// 内网地址 4 秒超时且不校验证书，公网地址 8 秒超时。
+func ClientForURL(rawURL string) *http.Client {
+	return clientFor(rawURL)
+}
+
+// isTLSError 判断错误是否由证书校验失败引起（内网 NAS 常用自签名证书）
+func isTLSError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var unknownAuthErr x509.UnknownAuthorityError
+	var hostErr x509.HostnameError
+	var certInvalidErr x509.CertificateInvalidError
+	if errors.As(err, &unknownAuthErr) || errors.As(err, &hostErr) || errors.As(err, &certInvalidErr) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "x509") || strings.Contains(msg, "certificate") || strings.Contains(msg, "tls")
+}
+
+// doWithTLSFallback 发起请求；证书校验失败时改用不校验证书的客户端重试一次。
+// 这样用 DDNS 域名访问内网自签名 HTTPS 服务也能取到图标。
+func doWithTLSFallback(req *http.Request, rawURL string) (*http.Response, error) {
+	resp, err := clientFor(rawURL).Do(req)
+	if err == nil || !isTLSError(err) {
+		return resp, err
+	}
+	retry := req.Clone(req.Context())
+	if req.GetBody != nil {
+		if body, bodyErr := req.GetBody(); bodyErr == nil {
+			retry.Body = body
+		}
+	}
+	return newInsecureHTTPClient().Do(retry)
+}
+
+// newBrowserRequestWithReferer 构造带 Referer 的请求。
+// 部分站点的静态资源（如 segmentfault 的 CDN 图标）缺少同源 Referer 会直接 403。
+func newBrowserRequestWithReferer(ctx context.Context, method, rawURL, accept, referer string) (*http.Request, error) {
+	req, err := newBrowserRequest(ctx, method, rawURL, accept)
+	if err != nil {
+		return nil, err
+	}
+	if referer != "" {
+		req.Header.Set("Referer", referer)
+	}
+	return req, nil
+}
+
+// originOf 返回 scheme://host，用作默认 Referer
+func originOf(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
 func newBrowserRequest(ctx context.Context, method, rawURL string, accept string) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, method, rawURL, nil)
 	if err != nil {
@@ -155,9 +255,14 @@ func fetchPage(ctx context.Context, rawURL string) *pageInfo {
 			lastErr = err
 			continue
 		}
-		resp, err := newHTTPClient().Do(req)
+		resp, err := doWithTLSFallback(req, candidate)
 		if err != nil {
 			lastErr = err
+			// 内网地址连不上时，换协议再试基本也不会通，
+			// 直接结束以免用户等上两个超时（8 秒）。
+			if isLikelyLocalHost(candidate) {
+				break
+			}
 			continue
 		}
 		body, readErr := io.ReadAll(io.LimitReader(resp.Body, pageMaxBytes))
@@ -300,7 +405,7 @@ func FaviconCandidates(rawURL string) []string {
 }
 
 func faviconCandidates(ctx context.Context, rawURL string) []string {
-	list := faviconCandidateList(ctx, rawURL)
+	list, _ := faviconCandidateList(ctx, rawURL)
 	out := make([]string, 0, len(list))
 	for _, c := range list {
 		out = append(out, c.url)
@@ -311,37 +416,71 @@ func faviconCandidates(ctx context.Context, rawURL string) []string {
 // faviconCandidate 是候选图标地址及其来源标记
 type faviconCandidate struct {
 	url        string
-	isFallback bool // og:image 等分享图，通常不是正方形图标
+	isFallback bool   // og:image 等分享图，通常不是正方形图标
+	referer    string // 下载时需要携带的 Referer（部分 CDN 防盗链）
 }
 
-// faviconCandidateList 返回候选图标地址（按优先级），并标记兜底项
-func faviconCandidateList(ctx context.Context, rawURL string) []faviconCandidate {
+// faviconCandidateList 返回候选图标地址（按优先级）、页面最终域名，并标记兜底项
+func faviconCandidateList(ctx context.Context, rawURL string) ([]faviconCandidate, string) {
 	info := fetchPage(ctx, rawURL)
 
 	out := make([]faviconCandidate, 0, 8)
 	seen := map[string]bool{}
-	add := func(u string, fallback bool) {
+	add := func(u string, fallback bool, referer string) {
 		if u == "" || seen[u] {
 			return
 		}
 		seen[u] = true
-		out = append(out, faviconCandidate{url: u, isFallback: fallback})
+		out = append(out, faviconCandidate{url: u, isFallback: fallback, referer: referer})
 	}
 
+	// 页面声明的图标往往放在独立 CDN 上并校验 Referer，带上站点首页地址更稳
+	pageReferer := ""
+	if info.base != nil {
+		pageReferer = info.base.String()
+	}
 	for _, u := range info.icons {
-		add(u, false)
+		add(u, false, pageReferer)
 	}
 
 	// 页面抓取到的是网络层错误（域名解析/连接失败）时，再猜默认路径也没有意义
 	base := info.base
 	if base != nil && (info.reached || info.lastErr == nil) {
 		origin := &url.URL{Scheme: base.Scheme, Host: base.Host}
+		originStr := origin.String()
 		for _, p := range defaultFaviconPaths {
-			add(origin.String()+p, false)
+			add(originStr+p, false, pageReferer)
 		}
 		if info.ogImage != "" {
-			add(info.ogImage, true)
+			add(info.ogImage, true, pageReferer)
 		}
+	}
+
+	// 兜底来源不在这里追加：站点自己声明了图标但全部下载失败时，
+	// 也要能退到公共图标服务，所以放到下载阶段统一处理。
+	return out, hostOf(base, rawURL)
+}
+
+// hostOf 取页面最终地址的域名，解析不出来时退回原始输入
+func hostOf(base *url.URL, rawURL string) string {
+	if base != nil && base.Hostname() != "" {
+		return base.Hostname()
+	}
+	if u, err := url.Parse(NormalizeURL(rawURL)); err == nil {
+		return u.Hostname()
+	}
+	return ""
+}
+
+// thirdPartyCandidates 返回公共图标服务的地址。
+// 内网地址与关闭开关时返回空。
+func thirdPartyCandidates(host string) []string {
+	if !ThirdPartyFallback || host == "" || isLikelyLocalHost(host) {
+		return nil
+	}
+	out := make([]string, 0, len(thirdPartyIconProviders))
+	for _, provider := range thirdPartyIconProviders {
+		out = append(out, provider(host))
 	}
 	return out
 }
@@ -366,14 +505,20 @@ func GetOneFaviconURLAndUpload(urlStr string) (string, bool) {
 
 // fetchImage 下载图标内容并推断扩展名，非图片内容会被拒绝
 func fetchImage(ctx context.Context, rawURL string, maxSize int64) ([]byte, string, error) {
+	return fetchImageWithReferer(ctx, rawURL, maxSize, "")
+}
+
+// fetchImageWithReferer 在 fetchImage 基础上带上 Referer。
+// 部分站点（如 segmentfault 的 CDN）没有同源 Referer 会返回 403。
+func fetchImageWithReferer(ctx context.Context, rawURL string, maxSize int64, referer string) ([]byte, string, error) {
 	if maxSize <= 0 {
 		maxSize = defaultMaxIconSize
 	}
-	req, err := newBrowserRequest(ctx, http.MethodGet, rawURL, "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+	req, err := newBrowserRequestWithReferer(ctx, http.MethodGet, rawURL, "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8", referer)
 	if err != nil {
 		return nil, "", err
 	}
-	resp, err := newHTTPClient().Do(req)
+	resp, err := doWithTLSFallback(req, rawURL)
 	if err != nil {
 		return nil, "", err
 	}
@@ -484,27 +629,27 @@ func CollectIconOptions(pageURL string, maxSize int64, limit int) ([]IconOption,
 // stopQuality > 0 时，一旦拿到清晰度达到该值的非兜底图标就提前结束，
 // 用于"自动取图标"场景，避免为了比较清晰度而下载过多候选。
 func collectIconOptions(ctx context.Context, pageURL string, maxSize int64, limit int, stopQuality int) ([]IconOption, error) {
-	candidates := faviconCandidateList(ctx, pageURL)
-	if len(candidates) == 0 {
-		return nil, ErrFaviconNotFound
-	}
+	candidates, host := faviconCandidateList(ctx, pageURL)
 	if limit <= 0 {
 		limit = 8
 	}
 
 	options := make([]IconOption, 0, limit)
 	seen := map[string]bool{}
-	for _, candidate := range candidates {
-		if len(options) >= limit {
-			break
-		}
-		data, ext, err := fetchImage(ctx, candidate.url, maxSize)
+	tryOne := func(candidate faviconCandidate) bool {
+		data, ext, err := fetchImageWithReferer(ctx, candidate.url, maxSize, candidate.referer)
 		if err != nil {
-			continue
+			// 带 Referer 被拒时，再不带 Referer 试一次（有些 CDN 反而排斥第三方 Referer）
+			if candidate.referer != "" {
+				data, ext, err = fetchImage(ctx, candidate.url, maxSize)
+			}
+			if err != nil {
+				return false
+			}
 		}
 		key := hashIcon(data)
 		if seen[key] {
-			continue
+			return false
 		}
 		seen[key] = true
 		width, height := IconDimensions(data)
@@ -518,10 +663,33 @@ func collectIconOptions(ctx context.Context, pageURL string, maxSize int64, limi
 			IsFallback: candidate.isFallback,
 		}
 		options = append(options, option)
-		if stopQuality > 0 && !option.IsFallback && option.quality() >= stopQuality {
+		return true
+	}
+
+	for _, candidate := range candidates {
+		if len(options) >= limit {
+			break
+		}
+		if !tryOne(candidate) {
+			continue
+		}
+		if stopQuality > 0 && !options[len(options)-1].IsFallback && options[len(options)-1].quality() >= stopQuality {
 			break
 		}
 	}
+
+	// 站点自身一个都没拿到（或全部下载失败）时，退到公共图标服务
+	if len(options) == 0 {
+		for _, u := range thirdPartyCandidates(host) {
+			if len(options) >= limit {
+				break
+			}
+			if tryOne(faviconCandidate{url: u, isFallback: true}) && stopQuality > 0 {
+				break
+			}
+		}
+	}
+
 	if len(options) == 0 {
 		return nil, ErrFaviconNotFound
 	}

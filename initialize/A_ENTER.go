@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"sun-panel/global"
 	"sun-panel/initialize/cUserToken"
 	"sun-panel/initialize/config"
@@ -15,6 +16,7 @@ import (
 	"sun-panel/initialize/systemSettingCache"
 	"sun-panel/initialize/userToken"
 	"sun-panel/lib/cmn"
+	"sun-panel/lib/siteFavicon"
 	"sun-panel/models"
 	"sun-panel/structs"
 
@@ -55,6 +57,11 @@ func InitApp() error {
 
 	// 多语言初始化
 	lang.LangInit("zh-cn") // en-us
+
+	// 图标获取的第三方兜底开关（默认开启）
+	if v := global.Config.GetValueStringOrDefault("base", "favicon_third_party"); v == "0" || strings.EqualFold(v, "false") {
+		siteFavicon.ThirdPartyFallback = false
+	}
 
 	DatabaseConnect()
 

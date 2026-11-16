@@ -63,7 +63,7 @@ func getPageTitle(targetURL string) string {
 		}
 	}
 
-	client := &http.Client{Timeout: 8 * time.Second}
+	client := siteFavicon.ClientForURL(siteFavicon.NormalizeURL(targetURL))
 	req, err := http.NewRequest(http.MethodGet, siteFavicon.NormalizeURL(targetURL), nil)
 	if err != nil {
 		return ""

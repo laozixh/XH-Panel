@@ -288,7 +288,15 @@ function getGroupListOptions() {
         </NFormItem>
 
         <NFormItem path="icon" :label="$t('common.icon')">
-          <IconEditor v-model:item-icon="model.icon" />
+          <div class="w-full">
+            <IconEditor v-model:item-icon="model.icon" />
+            <!-- 候选图标紧跟图标预览，避免用户滚到弹窗底部才能看到 -->
+            <FaviconPicker
+              v-model:visible="faviconPickerShow"
+              :options="faviconOptions"
+              @select="handleFaviconSelect"
+            />
+          </div>
         </NFormItem>
         <NFormItem path="lanUrl" :label="$t('iconItem.lanUrl')">
           <NInputGroup>
