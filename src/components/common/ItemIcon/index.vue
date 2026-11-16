@@ -67,8 +67,10 @@ const defaultStyle = ref({
 }
 
 .icon-img {
-  max-width: 100%;
-  max-height: 100%;
+  /* 铺满图标容器：不同站点拿到的图标原始尺寸差异很大（16px ~ 512px），
+     只用 max-width/max-height 会让小图标按原始像素显示，看起来明显偏小 */
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   display: block;
 }

@@ -300,20 +300,36 @@ func FaviconCandidates(rawURL string) []string {
 }
 
 func faviconCandidates(ctx context.Context, rawURL string) []string {
+	list := faviconCandidateList(ctx, rawURL)
+	out := make([]string, 0, len(list))
+	for _, c := range list {
+		out = append(out, c.url)
+	}
+	return out
+}
+
+// faviconCandidate 是候选图标地址及其来源标记
+type faviconCandidate struct {
+	url        string
+	isFallback bool // og:image 等分享图，通常不是正方形图标
+}
+
+// faviconCandidateList 返回候选图标地址（按优先级），并标记兜底项
+func faviconCandidateList(ctx context.Context, rawURL string) []faviconCandidate {
 	info := fetchPage(ctx, rawURL)
 
-	out := make([]string, 0, 8)
+	out := make([]faviconCandidate, 0, 8)
 	seen := map[string]bool{}
-	add := func(u string) {
+	add := func(u string, fallback bool) {
 		if u == "" || seen[u] {
 			return
 		}
 		seen[u] = true
-		out = append(out, u)
+		out = append(out, faviconCandidate{url: u, isFallback: fallback})
 	}
 
 	for _, u := range info.icons {
-		add(u)
+		add(u, false)
 	}
 
 	// 页面抓取到的是网络层错误（域名解析/连接失败）时，再猜默认路径也没有意义
@@ -321,10 +337,10 @@ func faviconCandidates(ctx context.Context, rawURL string) []string {
 	if base != nil && (info.reached || info.lastErr == nil) {
 		origin := &url.URL{Scheme: base.Scheme, Host: base.Host}
 		for _, p := range defaultFaviconPaths {
-			add(origin.String() + p)
+			add(origin.String()+p, false)
 		}
 		if info.ogImage != "" {
-			add(info.ogImage)
+			add(info.ogImage, true)
 		}
 	}
 	return out
@@ -427,7 +443,125 @@ func detectImageExt(data []byte, rawURL string) string {
 	return ""
 }
 
-// SaveFavicon 依次尝试页面声明的图标与站点默认图标，把第一个可用的图标保存到 savePath。
+// IconOption 是一个可选的站点图标
+type IconOption struct {
+	SourceURL  string // 图标原始地址
+	Data       []byte // 图标原始内容
+	Preview    string // base64 缩略图，供前端展示
+	Width      int    // 原始宽度（SVG 为 0）
+	Height     int    // 原始高度（SVG 为 0）
+	Ext        string // 原始扩展名
+	IsFallback bool   // 是否为 og:image 之类的分享图兜底
+}
+
+// quality 表示图标的清晰度权重：矢量图最清晰，其余取短边像素。
+func (o IconOption) quality() int {
+	if o.Ext == ".svg" {
+		return 1024
+	}
+	if o.Width < o.Height {
+		return o.Width
+	}
+	return o.Height
+}
+
+// FetchIcon 下载单个图标地址的内容
+func FetchIcon(rawURL string, maxSize int64) ([]byte, string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
+	defer cancel()
+	return fetchImage(ctx, rawURL, maxSize)
+}
+
+// CollectIconOptions 抓取页面并下载所有可用的候选图标，供用户挑选。
+// 返回结果按清晰度从高到低排序（矢量图最优先），并剔除内容完全相同的重复项。
+func CollectIconOptions(pageURL string, maxSize int64, limit int) ([]IconOption, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout*2)
+	defer cancel()
+	return collectIconOptions(ctx, pageURL, maxSize, limit, 0)
+}
+
+// collectIconOptions 是 CollectIconOptions 的内部实现。
+// stopQuality > 0 时，一旦拿到清晰度达到该值的非兜底图标就提前结束，
+// 用于"自动取图标"场景，避免为了比较清晰度而下载过多候选。
+func collectIconOptions(ctx context.Context, pageURL string, maxSize int64, limit int, stopQuality int) ([]IconOption, error) {
+	candidates := faviconCandidateList(ctx, pageURL)
+	if len(candidates) == 0 {
+		return nil, ErrFaviconNotFound
+	}
+	if limit <= 0 {
+		limit = 8
+	}
+
+	options := make([]IconOption, 0, limit)
+	seen := map[string]bool{}
+	for _, candidate := range candidates {
+		if len(options) >= limit {
+			break
+		}
+		data, ext, err := fetchImage(ctx, candidate.url, maxSize)
+		if err != nil {
+			continue
+		}
+		key := hashIcon(data)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		width, height := IconDimensions(data)
+		option := IconOption{
+			SourceURL:  candidate.url,
+			Data:       data,
+			Preview:    MakePreview(data),
+			Width:      width,
+			Height:     height,
+			Ext:        ext,
+			IsFallback: candidate.isFallback,
+		}
+		options = append(options, option)
+		if stopQuality > 0 && !option.IsFallback && option.quality() >= stopQuality {
+			break
+		}
+	}
+	if len(options) == 0 {
+		return nil, ErrFaviconNotFound
+	}
+
+	// 清晰度优先；兜底的分享图排到最后
+	sort.SliceStable(options, func(i, j int) bool {
+		if options[i].IsFallback != options[j].IsFallback {
+			return !options[i].IsFallback
+		}
+		return options[i].quality() > options[j].quality()
+	})
+	return options, nil
+}
+
+// SaveIconData 把图标内容统一尺寸后保存到 savePath，返回落盘文件名。
+func SaveIconData(data []byte, savePath string) (string, error) {
+	if strings.TrimSpace(savePath) == "" {
+		return "", errors.New("save path is empty")
+	}
+	if err := os.MkdirAll(savePath, os.ModePerm); err != nil {
+		return "", err
+	}
+	normalized, ext, _, _, err := NormalizeIcon(data)
+	if err != nil {
+		// 无法解码的图标（例如特殊格式）按原样保存，至少不丢图标
+		normalized, ext = data, detectImageExt(data, "")
+		if ext == "" {
+			return "", err
+		}
+	}
+	fileName := cmn.Md5(fmt.Sprintf("%s%d", time.Now().String(), len(normalized))) + ext
+	if err := os.WriteFile(path.Join(savePath, fileName), normalized, 0o644); err != nil {
+		return "", err
+	}
+	return fileName, nil
+}
+
+// SaveFavicon 抓取站点图标并保存到 savePath。
+// 会挑选清晰度最高的一个（而不是页面声明的第一个），
+// 这样 16x16 的小图标不会盖过同站点提供的 180x180 大图标。
 // 返回实际使用的图标地址与落盘文件名（含扩展名）。
 func SaveFavicon(pageURL, savePath string, maxSize int64) (string, string, error) {
 	if strings.TrimSpace(savePath) == "" {
@@ -437,31 +571,20 @@ func SaveFavicon(pageURL, savePath string, maxSize int64) (string, string, error
 		return "", "", err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout*2)
 	defer cancel()
 
-	candidates := faviconCandidates(ctx, pageURL)
-	if len(candidates) == 0 {
-		return "", "", ErrFaviconNotFound
+	// 一旦拿到 >=64px 的正式图标就不再继续下载，兼顾速度与清晰度
+	options, err := collectIconOptions(ctx, pageURL, maxSize, 8, 64)
+	if err != nil {
+		return "", "", err
 	}
 
-	var lastErr error
-	for _, candidate := range candidates {
-		data, ext, err := fetchImage(ctx, candidate, maxSize)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		fileName := cmn.Md5(fmt.Sprintf("%s%s%d", candidate, time.Now().String(), len(data))) + ext
-		if err := os.WriteFile(path.Join(savePath, fileName), data, 0o644); err != nil {
-			return "", "", err
-		}
-		return candidate, fileName, nil
+	fileName, err := SaveIconData(options[0].Data, savePath)
+	if err != nil {
+		return "", "", err
 	}
-	if lastErr == nil {
-		lastErr = ErrFaviconNotFound
-	}
-	return "", "", lastErr
+	return options[0].SourceURL, fileName, nil
 }
 
 // GetRemoteFileSize 获取远程文件的大小（保留旧接口）

@@ -48,3 +48,19 @@ export function getSiteFavicon<T>(url: string) {
     data: { url },
   })
 }
+
+// 获取站点图标候选项（可能多个），供用户挑选
+export function getSiteFaviconOptions<T>(url: string) {
+  return post<T>({
+    url: '/panel/itemIcon/getSiteFaviconOptions',
+    data: { url },
+  })
+}
+
+// 保存用户选中的图标到服务器
+export function saveSiteFavicon<T>(url: string, sourceUrl: string) {
+  return post<T>({
+    url: '/panel/itemIcon/saveSiteFavicon',
+    data: { url, sourceUrl },
+  })
+}

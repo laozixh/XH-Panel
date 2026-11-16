@@ -3,7 +3,9 @@ import { computed, defineEmits, defineProps, ref, watch } from 'vue'
 import type { FormInst, FormRules } from 'naive-ui'
 import { NButton, NForm, NFormItem, NInput, NInputGroup, NModal, NSelect, useMessage } from 'naive-ui'
 import IconEditor from './IconEditor.vue'
-import { edit, getSiteFavicon } from '@/api/panel/itemIcon'
+import FaviconPicker from './FaviconPicker.vue'
+import type { FaviconOption } from './FaviconPicker.vue'
+import { edit, getSiteFavicon, getSiteFaviconOptions, saveSiteFavicon } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { t } from '@/locales'
 
@@ -19,6 +21,10 @@ const emit = defineEmits<Emit>()
 const ms = useMessage()
 const submitLoading = ref(false)
 const getIconLoading = ref([false, false, false])
+// 站点提供多个图标时，让用户挑选
+const faviconPickerShow = ref(false)
+const faviconPickUrl = ref('')
+const faviconOptions = ref<FaviconOption[]>([])
 const itemIconGroupOptions = ref<{
   label: string
   value: number
@@ -121,23 +127,28 @@ const handleValidateButtonClick = (e: MouseEvent) => {
 }
 
 async function getIconByUrl(url: string, loadingIndex: number) {
+  if (!url)
+    return
   getIconLoading.value[loadingIndex] = true
   try {
-    const { code, data } = await getSiteFavicon<{ iconUrl?: string, pageTitle?: string }>(url)
+    const { code, data } = await getSiteFaviconOptions<{ icons?: FaviconOption[], pageTitle?: string }>(url)
     if (code === 0) {
       // 标题为空时，顺带自动填充
       if (!model.value.title && data.pageTitle)
         model.value.title = data.pageTitle
 
-      // 只有真的拿到图标地址才覆盖，避免把图标清成空白图片
-      if (data.iconUrl) {
-        model.value.icon = {
-          itemType: 2,
-          src: data.iconUrl,
-        }
+      const icons = data.icons || []
+      if (icons.length === 0) {
+        ms.warning(t('iconItem.geticonEmpty'))
+      }
+      else if (icons.length === 1) {
+        await savePickedIcon(url, icons[0].sourceUrl)
       }
       else {
-        ms.warning(t('iconItem.geticonEmpty'))
+        // 站点提供了多个图标，交给用户挑选
+        faviconOptions.value = icons
+        faviconPickUrl.value = url
+        faviconPickerShow.value = true
       }
     }
     else {
@@ -148,6 +159,33 @@ async function getIconByUrl(url: string, loadingIndex: number) {
     ms.error(t('iconItem.geticonFail'))
   }
   getIconLoading.value[loadingIndex] = false
+}
+
+// 把选中的图标保存到服务器并应用到当前条目
+async function savePickedIcon(url: string, sourceUrl: string) {
+  const { code, data } = await saveSiteFavicon<{ iconUrl?: string, pageTitle?: string }>(url, sourceUrl)
+  if (code !== 0 || !data.iconUrl) {
+    ms.error(t('iconItem.geticonFail'))
+    return
+  }
+  if (!model.value.title && data.pageTitle)
+    model.value.title = data.pageTitle
+  model.value.icon = {
+    itemType: 2,
+    src: data.iconUrl,
+  }
+}
+
+async function handleFaviconSelect(sourceUrl: string) {
+  const url = faviconPickUrl.value
+  if (!url)
+    return
+  try {
+    await savePickedIcon(url, sourceUrl)
+  }
+  catch (error) {
+    ms.error(t('iconItem.geticonFail'))
+  }
 }
 
 async function getTitleByUrl(url: string) {
@@ -267,6 +305,12 @@ function getGroupListOptions() {
           <NSelect v-model:value="model.openMethod" :options="options" />
         </NFormItem>
       </NForm>
+
+      <FaviconPicker
+        v-model:visible="faviconPickerShow"
+        :options="faviconOptions"
+        @select="handleFaviconSelect"
+      />
     </div>
 
     <template #footer>

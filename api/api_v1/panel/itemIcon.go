@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -16,7 +15,6 @@ import (
 	"sun-panel/api/api_v1/common/apiReturn"
 	"sun-panel/api/api_v1/common/base"
 	"sun-panel/global"
-	"sun-panel/lib/cmn"
 	"sun-panel/lib/siteFavicon"
 	"sun-panel/models"
 	"time"
@@ -283,6 +281,118 @@ func (a *ItemIcon) SaveSort(c *gin.Context) {
 	apiReturn.Success(c)
 }
 
+// faviconSavePath 返回当天的图标保存目录
+func faviconSavePath() string {
+	configUpload := global.Config.GetValueString("base", "source_path")
+	return fmt.Sprintf("%s/%d/%d/%d", configUpload, time.Now().Year(), time.Now().Month(), time.Now().Day())
+}
+
+// saveFaviconData 把图标内容统一尺寸后落盘，并登记到文件表，返回可访问地址
+func saveFaviconData(userId uint, host string, data []byte) (string, error) {
+	savePath := faviconSavePath()
+	fileName, err := siteFavicon.SaveIconData(data, savePath)
+	if err != nil {
+		return "", err
+	}
+	src := savePath + "/" + fileName
+
+	mFile := models.File{}
+	if _, err := mFile.AddFile(userId, host, path.Ext(fileName), src, "icon"); err != nil {
+		return "", err
+	}
+	// 与上传接口保持一致：去掉开头的 "."
+	return src[1:], nil
+}
+
+// 获取站点图标候选项，供前端展示让用户挑选
+func (a *ItemIcon) GetSiteFaviconOptions(c *gin.Context) {
+	req := panelApiStructs.ItemIconGetSiteFaviconOptionsReq{}
+
+	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
+		apiReturn.ErrorParamFomat(c, err.Error())
+		return
+	}
+
+	resp := panelApiStructs.ItemIconGetSiteFaviconOptionsResp{}
+	resp.PageTitle = getPageTitle(req.Url)
+	resp.Icons = []panelApiStructs.ItemIconGetSiteFaviconOption{}
+
+	options, err := siteFavicon.CollectIconOptions(req.Url, 1024*1024, 8)
+	if err != nil {
+		global.Logger.Debug("getSiteFaviconOptions failed:", err)
+		if strings.TrimSpace(resp.PageTitle) == "" {
+			apiReturn.Error(c, "acquisition failed")
+			return
+		}
+		apiReturn.SuccessData(c, resp)
+		return
+	}
+
+	for _, option := range options {
+		resp.Icons = append(resp.Icons, panelApiStructs.ItemIconGetSiteFaviconOption{
+			SourceUrl: option.SourceURL,
+			Preview:   option.Preview,
+			Width:     option.Width,
+			Height:    option.Height,
+		})
+	}
+
+	apiReturn.SuccessData(c, resp)
+}
+
+// 保存用户选中的站点图标（sourceUrl 为空时自动选择优先级最高的图标）
+func (a *ItemIcon) SaveSiteFavicon(c *gin.Context) {
+	userInfo, _ := base.GetCurrentUserInfo(c)
+	req := panelApiStructs.ItemIconSaveSiteFaviconReq{}
+
+	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
+		apiReturn.ErrorParamFomat(c, err.Error())
+		return
+	}
+
+	resp := panelApiStructs.ItemIconSaveSiteFaviconResp{}
+	resp.PageTitle = getPageTitle(req.Url)
+
+	parsedURL, err := url.Parse(siteFavicon.NormalizeURL(req.Url))
+	if err != nil {
+		apiReturn.Error(c, "acquisition failed:"+err.Error())
+		return
+	}
+
+	var data []byte
+	if strings.TrimSpace(req.SourceUrl) != "" {
+		data, _, err = siteFavicon.FetchIcon(req.SourceUrl, 1024*1024)
+		if err != nil {
+			global.Logger.Debug("saveSiteFavicon fetch failed:", err)
+			apiReturn.Error(c, "acquisition failed:"+err.Error())
+			return
+		}
+	} else {
+		options, optErr := siteFavicon.CollectIconOptions(req.Url, 1024*1024, 1)
+		if optErr != nil {
+			global.Logger.Debug("saveSiteFavicon collect failed:", optErr)
+		} else if len(options) > 0 {
+			data = options[0].Data
+		}
+	}
+
+	if len(data) > 0 {
+		iconUrl, saveErr := saveFaviconData(userInfo.ID, parsedURL.Host, data)
+		if saveErr != nil {
+			global.Logger.Debug("saveSiteFavicon save failed:", saveErr)
+		} else {
+			resp.IconUrl = iconUrl
+		}
+	}
+
+	if resp.IconUrl == "" && strings.TrimSpace(resp.PageTitle) == "" {
+		apiReturn.Error(c, "acquisition failed")
+		return
+	}
+
+	apiReturn.SuccessData(c, resp)
+}
+
 // 支持获取并直接下载对方网站图标到服务器
 func (a *ItemIcon) GetSiteFavicon(c *gin.Context) {
 	userInfo, _ := base.GetCurrentUserInfo(c)
@@ -301,20 +411,12 @@ func (a *ItemIcon) GetSiteFavicon(c *gin.Context) {
 		return
 	}
 
-	// 生成保存目录
-	configUpload := global.Config.GetValueString("base", "source_path")
-	savePath := fmt.Sprintf("%s/%d/%d/%d", configUpload, time.Now().Year(), time.Now().Month(), time.Now().Day())
-	isExist, _ := cmn.PathExists(savePath)
-	if !isExist {
-		os.MkdirAll(savePath, os.ModePerm)
-	}
-
 	// 依次尝试页面声明的图标、站点默认图标与分享图，保存第一个可用的
-	iconSourceURL, fileName, saveErr := siteFavicon.SaveFavicon(req.Url, savePath, 1024*1024)
+	iconSourceURL, fileName, saveErr := siteFavicon.SaveFavicon(req.Url, faviconSavePath(), 1024*1024)
 	if saveErr != nil {
 		global.Logger.Debug("getSiteFavicon failed:", saveErr)
 	} else {
-		src := savePath + "/" + fileName
+		src := faviconSavePath() + "/" + fileName
 		global.Logger.Debug("getSiteFavicon success:", iconSourceURL, "->", src)
 
 		mFile := models.File{}
