@@ -14,6 +14,9 @@ import (
 // 初始化总路由
 func InitRouters(addr string) error {
 	router := gin.Default()
+	// 配置可信反向代理，否则 ClientIP() 永远返回反代地址，
+	// 「自动模式」判断来源是否为内网时会误判。
+	applyTrustedProxies(router)
 	router.Use(webNoCache())
 	rootRouter := router.Group("/")
 	routerGroup := rootRouter.Group("api")
@@ -42,6 +45,29 @@ func InitRouters(addr string) error {
 
 	global.Logger.Info("XH-Panel is Started.  Listening and serving HTTP on ", addr)
 	return router.Run(addr)
+}
+
+// applyTrustedProxies 按配置设置可信反向代理网段。
+// 配置为空时退回 gin 的默认行为（不信任任何代理，ClientIP 取直连地址）。
+func applyTrustedProxies(router *gin.Engine) {
+	raw := global.Config.GetValueStringOrDefault("base", "trusted_proxies")
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return
+	}
+	proxies := []string{}
+	for _, item := range strings.Split(raw, ",") {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			proxies = append(proxies, item)
+		}
+	}
+	if len(proxies) == 0 {
+		return
+	}
+	if err := router.SetTrustedProxies(proxies); err != nil {
+		global.Logger.Warn("SetTrustedProxies failed, fallback to no proxy trust: ", err.Error())
+	}
 }
 
 func webNoCache() gin.HandlerFunc {

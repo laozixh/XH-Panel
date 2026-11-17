@@ -15,6 +15,10 @@ func getDefaultConfig() map[string]map[string]string {
 			"source_temp_path": "./runtime/temp", // 存放文件的缓存路径
 			// 站点自身拿不到图标时，是否退而使用公共图标服务（1 开启 / 0 关闭）
 			"favicon_third_party": "1",
+			// 自动模式下是否允许后端探测内网地址可达性（1 开启 / 0 关闭）
+			"probe_enabled": "1",
+			// 可信反向代理网段，逗号分隔；留空则不信任任何代理
+			"trusted_proxies": "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
 		},
 		"sqlite": {
 			"file_path": "./database/database.db",

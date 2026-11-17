@@ -33,4 +33,21 @@ declare namespace Common {
         id:number
         sort:number
     }
+
+    // 后端探测内网地址可达性
+    interface ProbeNetworkRequest{
+        ids:number[]
+    }
+
+    interface ProbeNetworkResult{
+        id:number
+        lanOk:boolean
+        lanMs:number
+    }
+
+    interface ProbeNetworkResponse{
+        clientIsLan:boolean
+        throttled:boolean
+        results:ProbeNetworkResult[]
+    }
 }
