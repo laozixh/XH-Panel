@@ -32,8 +32,8 @@ async function loadIconList() {
 
 function openIconPicker() {
   iconPickerShow.value = true
-  if (iconList.value.length === 0)
-    loadIconList()
+  // 图库内容包含「获取图标」自动保存下来的图标，每次打开都重新拉取，避免拿到旧列表
+  loadIconList()
 }
 
 function handlePickIcon(src: string) {
@@ -169,7 +169,15 @@ const handleUploadFinish = ({
           <div v-if="itemIconInfo.itemType === 2">
             <NInput v-model:value="itemIconInfo.src" class="mb-[5px] w-full" size="small" type="text" :placeholder="$t('iconItem.inputIconUrlOrUpload')" @input="handleChange" />
 
-            <div class="flex flex-col gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- 图库：获取图标时自动保存到服务器的图标都在这里，可直接点选复用 -->
+              <NButton size="small" type="primary" ghost @click="openIconPicker">
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true" style="margin-right: 4px; flex-shrink: 0;">
+                  <path d="M1 1h6v6H1V1zm8 0h6v6H9V1zM1 9h6v6H1V9zm8 0h6v6H9V9z" />
+                </svg>
+                <span>{{ $t('iconItem.gallery') }}</span>
+              </NButton>
+
               <NUpload
                 action="/api/file/uploadImg?fileType=icon"
                 :show-file-list="false"
@@ -185,21 +193,23 @@ const handleUploadFinish = ({
                     <NButton size="small" type="primary" ghost>
                       {{ $t('iconItem.selectUpload') }}
                     </NButton>
-                    <span class="ml-2 text-xs text-slate-500">或拖拽图片到这里</span>
+                    <span class="ml-2 text-xs text-slate-500">{{ $t('iconItem.dragHint') }}</span>
                   </div>
                 </NUploadDragger>
               </NUpload>
-
-              <NButton size="small" quaternary type="info" @click="openIconPicker" block>
-                选择已上传
-              </NButton>
             </div>
 
-            <RoundCardModal v-model:show="iconPickerShow" style="max-width: 720px;" size="small" title="选择已上传图标">
+            <RoundCardModal v-model:show="iconPickerShow" style="max-width: 720px;" size="small" :title="$t('iconItem.galleryTitle')">
               <div class="min-h-[160px]">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs text-slate-500">{{ $t('iconItem.galleryTip') }}</span>
+                  <NButton size="tiny" quaternary type="info" :loading="iconPickerLoading" @click="loadIconList">
+                    {{ $t('iconItem.galleryRefresh') }}
+                  </NButton>
+                </div>
                 <NSpin v-show="iconPickerLoading" size="small" />
                 <div v-if="!iconPickerLoading && iconList.length === 0" class="text-slate-500 text-sm">
-                  暂无已上传图标
+                  {{ $t('iconItem.galleryEmpty') }}
                 </div>
 
                 <NGrid v-else cols="2 400:4 700:6" :x-gap="8" :y-gap="8">
@@ -253,7 +263,7 @@ const handleUploadFinish = ({
 .upload-drop-zone {
     border: 1px dashed #94a3b8;
     border-radius: 8px;
-    padding: 8px 10px;
+    padding: 6px 10px;
     display: inline-flex;
     align-items: center;
     cursor: pointer;
