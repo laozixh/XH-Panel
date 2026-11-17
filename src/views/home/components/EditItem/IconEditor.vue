@@ -199,10 +199,9 @@ const handleUploadFinish = ({
               </NUpload>
             </div>
 
-            <RoundCardModal v-model:show="iconPickerShow" style="max-width: 720px;" size="small" :title="$t('iconItem.galleryTitle')">
-              <div class="min-h-[160px]">
-                <div class="flex items-center justify-between mb-2">
-                  <span class="text-xs text-slate-500">{{ $t('iconItem.galleryTip') }}</span>
+            <RoundCardModal v-model:show="iconPickerShow" style="max-width: 480px;" size="small" :title="$t('iconItem.galleryTitle')">
+              <div class="min-h-[96px]">
+                <div class="flex items-center justify-end mb-1">
                   <NButton size="tiny" quaternary type="info" :loading="iconPickerLoading" @click="loadIconList">
                     {{ $t('iconItem.galleryRefresh') }}
                   </NButton>
@@ -212,7 +211,7 @@ const handleUploadFinish = ({
                   {{ $t('iconItem.galleryEmpty') }}
                 </div>
 
-                <NGrid v-else cols="2 400:4 700:6" :x-gap="8" :y-gap="8">
+                <NGrid v-else cols="3 400:4 700:5" :x-gap="6" :y-gap="6" style="max-height: 320px; overflow-y: auto;">
                   <NGridItem v-for="(it, idx) in iconList" :key="`icon-pick-${idx}`">
                     <div class="pick-card" @click="handlePickIcon(it.src)">
                       <div class="pick-thumb transparent-grid">
@@ -271,14 +270,14 @@ const handleUploadFinish = ({
 
 .pick-card {
     border: 1px solid rgba(148, 163, 184, 0.35);
-    border-radius: 10px;
+    border-radius: 8px;
     overflow: hidden;
     cursor: pointer;
     background: rgba(255, 255, 255, 0.7);
 }
 
 .pick-thumb {
-    height: 72px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -292,8 +291,9 @@ const handleUploadFinish = ({
 }
 
 .pick-name {
-    padding: 6px 8px;
-    font-size: 12px;
+    padding: 2px 5px;
+    font-size: 11px;
+    line-height: 16px;
     color: #475569;
     white-space: nowrap;
     overflow: hidden;

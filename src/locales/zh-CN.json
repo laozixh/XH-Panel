@@ -216,7 +216,6 @@
     "gallery": "图库",
     "galleryEmpty": "图标库还是空的，先用「获取图标」抓取或本地上传一个吧",
     "galleryRefresh": "刷新",
-    "galleryTip": "这里是你已保存到服务器的图标，点击即可直接使用",
     "galleryTitle": "图标库",
     "getGroupFail": "分组信息获取失败",
     "getIcon": "获取图标",

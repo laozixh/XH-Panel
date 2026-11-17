@@ -216,7 +216,6 @@
     "gallery": "Gallery",
     "galleryEmpty": "The icon gallery is empty. Fetch an icon or upload one first",
     "galleryRefresh": "Refresh",
-    "galleryTip": "Icons you have saved to the server. Click one to use it",
     "galleryTitle": "Icon gallery",
     "getGroupFail": "Failed to get group information",
     "getIcon": "Get icon",
