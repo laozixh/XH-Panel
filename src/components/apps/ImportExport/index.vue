@@ -22,7 +22,7 @@ const importRoundModalShow = ref(false)
 const exportRoundModalShow = ref(false)
 const loading = ref(false)
 const uploadLoading = ref(false)
-const version = ref('1.06') // 当前软件版本
+const version = ref('1.05') // 当前软件版本
 const debug = ref(false)
 
 const importObj = ref<ImportJsonResult | null> (null)

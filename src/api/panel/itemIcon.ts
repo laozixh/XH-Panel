@@ -64,11 +64,3 @@ export function saveSiteFavicon<T>(url: string, sourceUrl: string) {
     data: { url, sourceUrl },
   })
 }
-
-// 由后端探测书签的内网地址是否可直连（用于自动模式选择线路）
-export function probeNetwork<T>(ids: number[]) {
-  return post<T>({
-    url: '/panel/itemIcon/probeNetwork',
-    data: { ids },
-  })
-}

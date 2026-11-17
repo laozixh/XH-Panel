@@ -1,5 +1,4 @@
 import { PanelStateNetworkModeEnum } from '@/enums'
-import { probeNetwork } from '@/api/panel/itemIcon'
 
 /**
  * 判断当前页面是否通过局域网地址访问。
@@ -209,65 +208,10 @@ export async function resolveNetworkUrlAsync(item: Panel.ItemInfo | null | undef
   if (cached && cached.url && Date.now() - cached.at < CACHE_TTL)
     return cached.url
 
-  // https 页面探测 http 内网地址会被浏览器拦截，改由后端代测
-  if (isMixedContentBlocked(lanUrl)) {
-    await runServerProbe([item])
-    const after = pickCache.get(key)
-    if (after && after.url)
-      return after.url
-    // 后端也拿不到结果时退回主机名判断；
-    // 若后端已告知本次访问来自内网，则直接信任它
-    const onLan = serverProbeAt ? serverClientIsLan : isLanAccess()
-    return onLan ? lanUrl : wanUrl
-  }
-
   // 点击路径用更短的超时，宁可这次选公网也不要让用户等
   const url = await pickFasterUrl(item, CLICK_PROBE_TIMEOUT)
   pickCache.set(key, { url, at: Date.now() })
   return url
-}
-
-/** 后端探测状态：记录本次请求来源是否为私网 */
-let serverProbeAt = 0
-let serverClientIsLan = false
-
-/** 后端探测结果缓存时长，与前端一致 */
-const SERVER_PROBE_TTL = 5 * 60 * 1000
-
-/**
- * 由后端探测内网地址是否可直连。
- * 只传书签 ID，后端从数据库取出地址后做 TCP 拨号，不接受任意 URL。
- */
-async function runServerProbe(items: Panel.ItemInfo[]) {
-  const targets = items.filter(item => item && item.id && item.lanUrl && item.url).slice(0, WARM_LIMIT)
-  if (targets.length === 0)
-    return
-
-  try {
-    const { code, data } = await probeNetwork<Common.ProbeNetworkResponse>(targets.map(item => item.id as number))
-    if (code !== 0 || !data)
-      return
-
-    serverProbeAt = Date.now()
-    serverClientIsLan = !!data.clientIsLan
-
-    const byId = new Map<number, Common.ProbeNetworkResult>()
-    for (const r of data.results || [])
-      byId.set(r.id, r)
-
-    for (const item of targets) {
-      const r = byId.get(item.id as number)
-      if (!r)
-        continue
-      // 内网可直连就用内网，否则用外网
-      const url = r.lanOk ? item.lanUrl : item.url
-      if (url)
-        pickCache.set(cacheKey(item), { url, at: Date.now() })
-    }
-  }
-  catch {
-    // 接口失败时不影响正常使用，前端会退回其它判断方式
-  }
 }
 
 /** 预热上限：书签很多时只预热前若干个，其余在点击时再测速。 */
@@ -284,26 +228,21 @@ export function warmUpNetworkLatency(items: Panel.ItemInfo[] | null | undefined,
   if (targets.length === 0)
     return
 
-  const run = () => {
-    // https 页面无法探测 http 内网地址，交给后端代测
-    if (targets.some(item => isMixedContentBlocked(item.lanUrl))) {
-      runServerProbe(targets)
-      return
-    }
-
-    let index = 0
-    const worker = async () => {
-      while (index < targets.length) {
-        const item = targets[index++]
-        try {
-          const url = await pickFasterUrl(item)
-          pickCache.set(cacheKey(item), { url, at: Date.now() })
-        }
-        catch {
-          // 预热失败不影响正常使用
-        }
+  let index = 0
+  const worker = async () => {
+    while (index < targets.length) {
+      const item = targets[index++]
+      try {
+        const url = await pickFasterUrl(item)
+        pickCache.set(cacheKey(item), { url, at: Date.now() })
+      }
+      catch {
+        // 预热失败不影响正常使用
       }
     }
+  }
+
+  const run = () => {
     for (let i = 0; i < Math.min(concurrency, targets.length); i++)
       worker()
   }
@@ -319,8 +258,6 @@ export function warmUpNetworkLatency(items: Panel.ItemInfo[] | null | undefined,
 export function clearNetworkLatencyCache() {
   pickCache.clear()
   probeInflight.clear()
-  serverProbeAt = 0
-  serverClientIsLan = false
 }
 
 /** 供设置页显示用：读取某个条目上一次的判定结果。 */

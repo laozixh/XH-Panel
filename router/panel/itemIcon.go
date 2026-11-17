@@ -18,7 +18,6 @@ func InitItemIcon(router *gin.RouterGroup) {
 		r.POST("/panel/itemIcon/getSiteFavicon", itemIcon.GetSiteFavicon)
 		r.POST("/panel/itemIcon/getSiteFaviconOptions", itemIcon.GetSiteFaviconOptions)
 		r.POST("/panel/itemIcon/saveSiteFavicon", itemIcon.SaveSiteFavicon)
-		r.POST("/panel/itemIcon/probeNetwork", itemIcon.ProbeNetwork)
 	}
 
 	// 公开模式

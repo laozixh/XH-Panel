@@ -51,20 +51,3 @@ type ItemIconSaveSiteFaviconResp struct {
 	IconUrl   string `json:"iconUrl"`
 	PageTitle string `json:"pageTitle"`
 }
-
-// 内网可达性探测：只接受书签 ID，不接受任意 URL
-type ItemIconProbeNetworkReq struct {
-	Ids []uint `json:"ids"`
-}
-
-type ItemIconProbeNetworkResult struct {
-	Id    uint `json:"id"`
-	LanOk bool `json:"lanOk"` // 内网地址是否可直连
-	LanMs int  `json:"lanMs"` // 内网拨号耗时（毫秒），失败为 0
-}
-
-type ItemIconProbeNetworkResp struct {
-	ClientIsLan bool                         `json:"clientIsLan"` // 本次请求来源是否为私网地址
-	Throttled   bool                         `json:"throttled"`   // 是否被限流（前端沿用上次结果）
-	Results     []ItemIconProbeNetworkResult `json:"results"`
-}
