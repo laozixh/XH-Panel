@@ -9,7 +9,7 @@ import { deletes, edit, getListByGroupId, saveSort } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 
 import { setTitle, updateLocalUserInfo } from '@/utils/cmn'
-import { resolveNetworkUrl } from '@/utils/network'
+import { clearNetworkLatencyCache, resolveNetworkUrl, resolveNetworkUrlAsync, warmUpNetworkLatency } from '@/utils/network'
 import { useAuthStore, usePanelState } from '@/store'
 import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
@@ -118,6 +118,14 @@ function handleItemClick(itemGroupIndex: number, item: Panel.ItemInfo) {
     return
   }
 
+  // 自动模式：按延迟选择线路。预热命中缓存时零延迟，未命中则现场测速一次
+  if (panelState.networkMode === PanelStateNetworkModeEnum.auto && item.lanUrl && item.url) {
+    resolveNetworkUrlAsync(item, panelState.networkMode).then((url) => {
+      openPage(item.openMethod, url, item.title)
+    })
+    return
+  }
+
   openPage(item.openMethod, resolveNetworkUrl(item, panelState.networkMode), item.title)
 }
 
@@ -137,6 +145,7 @@ function getList() {
     }
     filterItems.value = items.value
     nextTick(() => recalcCatalogDots())
+    warmUpAutoNetwork()
     // console.log(items)
   })
 }
@@ -399,14 +408,30 @@ function handleEditSuccess(item: Panel.ItemInfo) {
 
 function handleChangeNetwork(mode: PanelStateNetworkModeEnum) {
   panelState.setNetworkMode(mode)
+  // 切换模式后重新测速，让自动模式的结果反映当前网络环境
+  clearNetworkLatencyCache()
   if (mode === PanelStateNetworkModeEnum.lan)
     ms.success(t('panelHome.changeToLanModelSuccess'))
 
   else if (mode === PanelStateNetworkModeEnum.wan)
     ms.success(t('panelHome.changeToWanModelSuccess'))
 
-  else
+  else {
     ms.success(t('panelHome.changeToAutoModelSuccess'))
+    warmUpAutoNetwork()
+  }
+}
+
+/** 自动模式下后台预热延迟缓存，用户点击时直接命中 */
+function warmUpAutoNetwork() {
+  if (panelState.networkMode !== PanelStateNetworkModeEnum.auto)
+    return
+  const all: Panel.ItemInfo[] = []
+  for (const group of items.value) {
+    if (group.items)
+      all.push(...group.items)
+  }
+  warmUpNetworkLatency(all)
 }
 
 // 结束拖拽

@@ -223,7 +223,7 @@
     "inputIconName": "请输入图标名称",
     "inputIconUrlOrUpload": "输入图标地址或上传",
     "lanUrl": "内网地址",
-    "lanUrlInputPlaceholder": "http(s)://（内网地址，内网模式或自动模式下会优先跳转）",
+    "lanUrlInputPlaceholder": "http(s)://（内网地址，自动模式下会测速优先使用）",
     "newWindowOpen": "新窗口打开",
     "onlineIcon": "在线图标",
     "onlineIconLibrary": "在线图标库",
@@ -239,7 +239,7 @@
   },
   "panelHome": {
     "changeToAutoModel": "切换为自动模式",
-    "changeToAutoModelSuccess": "已经切换到自动模式（在局域网内优先打开内网地址）",
+    "changeToAutoModelSuccess": "已经切换到自动模式（按访问速度自动选择内外网地址）",
     "changeToLanModel": "切换为内网模式",
     "changeToLanModelSuccess": "已经切换到内网模式（模式状态仅保存在本地）",
     "changeToWanModel": "切换为公网模式",

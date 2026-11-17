@@ -223,7 +223,7 @@
     "inputIconName": "Enter icon name",
     "inputIconUrlOrUpload": "Enter icon URL or upload",
     "lanUrl": "LAN URL",
-    "lanUrlInputPlaceholder": "http(s):// (used first in LAN mode or auto mode)",
+    "lanUrlInputPlaceholder": "http(s):// (preferred in auto mode when it responds faster)",
     "newWindowOpen": "Open in new window",
     "onlineIcon": "Online icon",
     "onlineIconLibrary": "Online icon library",
@@ -239,7 +239,7 @@
   },
   "panelHome": {
     "changeToAutoModel": "Switch to auto mode",
-    "changeToAutoModelSuccess": "Switched to auto mode (LAN URLs open first inside your local network)",
+    "changeToAutoModelSuccess": "Switched to auto mode (picks LAN or WAN by measured speed)",
     "changeToLanModel": "Switch to LAN mode",
     "changeToLanModelSuccess": "Switched to LAN mode (mode status saved locally)",
     "changeToWanModel": "Switch to WAN mode",
