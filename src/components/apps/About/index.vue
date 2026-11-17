@@ -3,7 +3,7 @@ import { NDivider, NGradientText } from 'naive-ui'
 import srcSvglogo from '@/assets/logo.svg'
 import srcGithub from '@/assets/about_image/github.png'
 
-const versionName = '1.05'
+const versionName = '1.07'
 </script>
 
 <template>
