@@ -19,7 +19,19 @@ const emit = defineEmits<{
   (e: 'update:visible', visible: boolean): void
 }>()
 
-const componentName = ref('UserInfo')
+// 记住上次打开的应用页：本组件若因父级重渲染被重建，不至于跳回默认的「我的信息」
+const LAST_APP_KEY = 'appStarterComponentName'
+
+function readLastApp(): string {
+  try {
+    return window.localStorage.getItem(LAST_APP_KEY) || 'UserInfo'
+  }
+  catch {
+    return 'UserInfo'
+  }
+}
+
+const componentName = ref(readLastApp())
 const collapsed = ref(false)
 const screenWidth = ref(0)
 const isSmallScreen = ref(false)
@@ -71,6 +83,10 @@ const show = computed({
 
 function handleClickApp(item: App) {
   componentName.value = item.componentName
+  try {
+    window.localStorage.setItem(LAST_APP_KEY, item.componentName)
+  }
+  catch {}
   if (isSmallScreen.value)
     collapsed.value = true
 }

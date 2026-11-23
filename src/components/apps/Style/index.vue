@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import type { UploadFileInfo } from 'naive-ui'
 import { NButton, NButtonGroup, NCard, NColorPicker, NGrid, NGridItem, NInput, NInputGroup, NPopconfirm, NSelect, NSpin, NSlider, NSwitch, NUpload, NUploadDragger, useMessage } from 'naive-ui'
 import { getList } from '@/api/system/file'
@@ -92,16 +92,32 @@ const floatingToolsPositionOptions = [
   { label: '右下角', value: 'right-bottom' },
 ]
 
-watch(panelState.panelConfig, () => {
-  if (!isSaveing.value) {
-    isSaveing.value = true
+// 面板配置改动后延迟保存：避免拖动滑块/连续切换时每帧都发请求。
+// 注意：切换「背景类型」这类操作会立刻改变页面结构，用户往往在 1 秒内就关掉面板，
+// 所以卸载时必须把未落盘的改动立刻刷出去，否则改动会丢，用户会觉得"得再回来保存一次"。
+let saveTimer: ReturnType<typeof setTimeout> | null = null
 
-    setTimeout(() => {
-      panelState.recordState()// 本地记录
-      isSaveing.value = false
-      uploadCloud()
-    }, 1000)
+function flushSave() {
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
   }
+  panelState.recordState() // 本地记录
+  isSaveing.value = false
+  uploadCloud()
+}
+
+watch(panelState.panelConfig, () => {
+  if (saveTimer)
+    clearTimeout(saveTimer)
+  isSaveing.value = true
+  saveTimer = setTimeout(flushSave, 1000)
+}, { deep: true })
+
+onUnmounted(() => {
+  // 面板被关闭/切换时，把待保存的改动立刻写入
+  if (saveTimer)
+    flushSave()
 })
 
 function handleUploadBackgroundFinish({

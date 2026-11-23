@@ -662,30 +662,37 @@ function getGroupDotTop(groupId?: number) {
 
 <template>
   <div class="w-full h-full sun-main">
+    <!--
+      注意：背景这里刻意不用 v-if / v-else 切换静态图与视频。
+      两分支会让 block 的 dynamicChildren 数量随背景类型变化，而 Vue 是按“下标”
+      配对 dynamicChildren 做 patch 的，切换背景后索引会整体错位，
+      导致后续节点（图标、悬浮按钮、设置弹窗）被错误 patch，
+      表现为“图标消失、设置弹窗跳回我的信息”。
+      所以这里固定渲染「静态图 div + video」两个兄弟节点，只用 display 切换。
+    -->
     <div
-      v-if="panelState.panelConfig.backgroundType === 1 && panelState.panelConfig.backgroundVideoSrc"
       class="cover wallpaper"
-      :style="{ filter: `blur(${panelState.panelConfig.backgroundBlur}px)` }"
-    >
-      <video
-        class="wallpaper-video"
-        :src="panelState.panelConfig.backgroundVideoSrc"
-        autoplay
-        muted
-        loop
-        playsinline
-        webkit-playsinline
-        preload="auto"
-      />
-    </div>
-    <div
-      v-else
-      class="cover wallpaper" :style="{
+      :style="{
         filter: `blur(${panelState.panelConfig.backgroundBlur}px)`,
         background: `url(${panelState.panelConfig.backgroundImageSrc}) no-repeat`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
+        display: panelState.panelConfig.backgroundType === 1 && panelState.panelConfig.backgroundVideoSrc ? 'none' : 'block',
       }"
+    />
+    <video
+      class="wallpaper-video"
+      :src="panelState.panelConfig.backgroundVideoSrc || undefined"
+      :style="{
+        display: panelState.panelConfig.backgroundType === 1 && panelState.panelConfig.backgroundVideoSrc ? 'block' : 'none',
+        filter: `blur(${panelState.panelConfig.backgroundBlur}px)`,
+      }"
+      autoplay
+      muted
+      loop
+      playsinline
+      webkit-playsinline
+      preload="auto"
     />
     <div class="mask" :style="{ backgroundColor: `rgba(0,0,0,${panelState.panelConfig.backgroundMaskNumber})` }" />
     <div
@@ -1120,8 +1127,12 @@ html {
   transform: scale(1.05);
 }
 
-/* 动态背景：视频铺满并裁切，禁止交互 */
+/* 动态背景：视频铺满并裁切，禁止交互。
+   必须绝对定位——它是根节点的直接子元素，若参与文档流会把内容区挤下去。 */
 .wallpaper-video {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
