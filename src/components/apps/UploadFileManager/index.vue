@@ -21,6 +21,13 @@ const loading = ref(false)
 
 const currentFileType = ref<'icon' | 'wallpaper'>('wallpaper')
 const currentTypeLabel = computed(() => (currentFileType.value === 'wallpaper' ? '壁纸' : '图标'))
+
+// 壁纸包含静态图片与动态视频
+const videoExts = ['.mp4', '.webm', '.ogv']
+function isVideoFile(src: string) {
+  const lower = (src || '').toLowerCase()
+  return videoExts.some(ext => lower.endsWith(ext))
+}
 const infoModalState = ref<InfoModalState>({
   show: false,
   title: '',
@@ -84,7 +91,15 @@ function handleInfoClick(fileInfo: File.Info) {
 }
 
 function handleSetWallpaper(imgSrc: string) {
-  panelStore.panelConfig.backgroundImageSrc = imgSrc
+  // 视频文件自动切换为动态背景
+  if (isVideoFile(imgSrc)) {
+    panelStore.panelConfig.backgroundType = 1
+    panelStore.panelConfig.backgroundVideoSrc = imgSrc
+  }
+  else {
+    panelStore.panelConfig.backgroundType = 0
+    panelStore.panelConfig.backgroundImageSrc = imgSrc
+  }
   savePanelConfig({ panel: panelStore.panelConfig })
 }
 
@@ -120,7 +135,16 @@ onMounted(() => {
             <NCard size="small" style="border-radius: 5px;" :bordered="true">
               <template #cover>
                 <div class="card transparent-grid">
-                  <NImage :lazy="true" style="object-fit: contain;height: 100%;" :src="item.src" />
+                  <video
+                    v-if="isVideoFile(item.src)"
+                    class="h-full w-full object-contain"
+                    :src="item.src"
+                    muted
+                    loop
+                    playsinline
+                    preload="metadata"
+                  />
+                  <NImage v-else :lazy="true" style="object-fit: contain;height: 100%;" :src="item.src" />
                 </div>
               </template>
               <template #footer>

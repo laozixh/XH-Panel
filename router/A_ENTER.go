@@ -1,6 +1,7 @@
 package router
 
 import (
+	"mime"
 	"strings"
 	"sun-panel/global"
 	// "sun-panel/router/admin"
@@ -13,6 +14,15 @@ import (
 
 // 初始化总路由
 func InitRouters(addr string) error {
+	// 动态背景（视频）需要正确的 MIME 类型，避免部分系统/精简镜像缺少映射
+	for ext, typ := range map[string]string{
+		".mp4":  "video/mp4",
+		".webm": "video/webm",
+		".ogv":  "video/ogg",
+	} {
+		_ = mime.AddExtensionType(ext, typ)
+	}
+
 	router := gin.Default()
 	router.Use(webNoCache())
 	rootRouter := router.Group("/")

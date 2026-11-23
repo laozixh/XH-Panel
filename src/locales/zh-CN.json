@@ -51,6 +51,9 @@
     },
     "baseSettings": {
       "appName": "风格设置",
+      "backgroundImage": "静态图片",
+      "backgroundType": "背景类型",
+      "backgroundVideo": "动态视频",
       "bottomMargin": "下边距",
       "clock": "时钟组件",
       "clockSecondShow": "显示秒",
@@ -66,6 +69,8 @@
       "mask": "遮罩",
       "maxWidth": "最大宽度",
       "netModeChangeButtonShow": "显示网络模式切换按钮",
+      "nothingWallpaper": "暂无已上传壁纸",
+      "pickWallpaper": "选择已上传壁纸",
       "publicVisitModeShow": "公开模式允许显示",
       "resetWarnText": "确定要重置这些样式吗？",
       "searchBar": "搜索栏组件",
@@ -77,8 +82,11 @@
       "textContent": "文本内容",
       "topMargin": "上边距",
       "uploadOrDragText": "点击上传替换图片或拖拽到框内",
+      "uploadVideoOrDragText": "点击上传视频或拖拽到框内（支持 mp4 / webm）",
       "vague": "模糊",
-      "wallpaper": "壁纸"
+      "videoUrlPlaceholder": "视频地址，例如 /uploads/xxx.mp4",
+      "wallpaper": "壁纸",
+      "wallpaperRefresh": "刷新"
     },
     "exportImport": {
       "appName": "导出导入",

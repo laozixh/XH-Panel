@@ -10,6 +10,9 @@ const defaultFooterHtml = ''
 export function defaultStatePanelConfig(): Panel.panelConfig {
   return {
     backgroundImageSrc: defaultBackground,
+    // 背景类型：0 静态图片（默认），1 动态视频
+    backgroundType: 0,
+    backgroundVideoSrc: '',
     backgroundBlur: 0,
     backgroundMaskNumber: 0,
     iconStyle: PanelPanelConfigStyleEnum.icon,

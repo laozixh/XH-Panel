@@ -29,6 +29,11 @@ func (a *FileApi) UploadImg(c *gin.Context) {
 		return
 	} else {
 		fileExt := strings.ToLower(path.Ext(f.Filename))
+		fileType := strings.ToLower(strings.TrimSpace(c.Query("fileType")))
+		if fileType != "icon" && fileType != "wallpaper" {
+			fileType = ""
+		}
+
 		agreeExts := []string{
 			".png",
 			".jpg",
@@ -38,8 +43,14 @@ func (a *FileApi) UploadImg(c *gin.Context) {
 			".svg",
 			".ico",
 		}
+		// 壁纸支持动态背景（视频）
+		agreeVideoExts := []string{
+			".mp4",
+			".webm",
+			".ogv",
+		}
 
-		if !cmn.InArray(agreeExts, fileExt) {
+		if !cmn.InArray(agreeExts, fileExt) && !(fileType == "wallpaper" && cmn.InArray(agreeVideoExts, fileExt)) {
 			apiReturn.ErrorByCode(c, 1301)
 			return
 		}
@@ -53,11 +64,6 @@ func (a *FileApi) UploadImg(c *gin.Context) {
 		c.SaveUploadedFile(f, filepath)
 
 		// 像数据库添加记录
-		fileType := strings.ToLower(strings.TrimSpace(c.Query("fileType")))
-		if fileType != "icon" && fileType != "wallpaper" {
-			fileType = ""
-		}
-
 		mFile := models.File{}
 		mFile.AddFile(userInfo.ID, f.Filename, fileExt, filepath, fileType)
 		apiReturn.SuccessData(c, gin.H{

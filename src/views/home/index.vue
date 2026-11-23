@@ -663,6 +663,23 @@ function getGroupDotTop(groupId?: number) {
 <template>
   <div class="w-full h-full sun-main">
     <div
+      v-if="panelState.panelConfig.backgroundType === 1 && panelState.panelConfig.backgroundVideoSrc"
+      class="cover wallpaper"
+      :style="{ filter: `blur(${panelState.panelConfig.backgroundBlur}px)` }"
+    >
+      <video
+        class="wallpaper-video"
+        :src="panelState.panelConfig.backgroundVideoSrc"
+        autoplay
+        muted
+        loop
+        playsinline
+        webkit-playsinline
+        preload="auto"
+      />
+    </div>
+    <div
+      v-else
       class="cover wallpaper" :style="{
         filter: `blur(${panelState.panelConfig.backgroundBlur}px)`,
         background: `url(${panelState.panelConfig.backgroundImageSrc}) no-repeat`,
@@ -1101,6 +1118,16 @@ html {
   /* background: url(@/assets/start_sky.jpg) no-repeat; */
 
   transform: scale(1.05);
+}
+
+/* 动态背景：视频铺满并裁切，禁止交互 */
+.wallpaper-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+  display: block;
 }
 
 .text-shadow {

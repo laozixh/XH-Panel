@@ -17,7 +17,24 @@ const showWallpaperInput = ref(false)
 const wallpaperPickerShow = ref(false)
 const wallpaperPickerLoading = ref(false)
 const wallpaperList = ref<File.Info[]>([])
-const wallpaperCountLabel = computed(() => wallpaperList.value.length)
+// 图库按当前背景类型过滤：静态图片只看图片，动态视频只看视频
+const videoExts = ['.mp4', '.webm', '.ogv']
+function isVideoFile(src: string) {
+  const lower = (src || '').toLowerCase()
+  return videoExts.some(ext => lower.endsWith(ext))
+}
+const filteredWallpaperList = computed(() => {
+  const wantVideo = panelState.panelConfig.backgroundType === 1
+  return wallpaperList.value.filter(it => isVideoFile(it.src) === wantVideo)
+})
+const wallpaperCountLabel = computed(() => filteredWallpaperList.value.length)
+
+const backgroundTypeOptions = [
+  { label: t('apps.baseSettings.backgroundImage'), value: 0 },
+  { label: t('apps.baseSettings.backgroundVideo'), value: 1 },
+]
+
+const uploadAccept = computed(() => (panelState.panelConfig.backgroundType === 1 ? 'video/mp4,video/webm,video/ogg' : 'image/*'))
 
 async function loadWallpaperList() {
   wallpaperPickerLoading.value = true
@@ -37,7 +54,10 @@ function openWallpaperPicker() {
 }
 
 function handlePickWallpaper(src: string) {
-  panelState.panelConfig.backgroundImageSrc = src
+  if (panelState.panelConfig.backgroundType === 1)
+    panelState.panelConfig.backgroundVideoSrc = src
+  else
+    panelState.panelConfig.backgroundImageSrc = src
   setUserConfig({ panel: panelState.panelConfig })
   wallpaperPickerShow.value = false
 }
@@ -92,7 +112,10 @@ function handleUploadBackgroundFinish({
   event?: ProgressEvent
 }) {
   const res = JSON.parse((event?.target as XMLHttpRequest).response)
-  panelState.panelConfig.backgroundImageSrc = res.data.imageUrl
+  if (panelState.panelConfig.backgroundType === 1)
+    panelState.panelConfig.backgroundVideoSrc = res.data.imageUrl
+  else
+    panelState.panelConfig.backgroundImageSrc = res.data.imageUrl
   return file
 }
 
@@ -212,10 +235,15 @@ function resetPanelConfig() {
       <div class="text-slate-500 mb-[5px] font-bold">
         {{ $t('apps.baseSettings.wallpaper') }}
       </div>
+      <div class="flex items-center mt-[5px]">
+        <span class="mr-[10px]">{{ $t('apps.baseSettings.backgroundType') }}</span>
+        <NSelect v-model:value="panelState.panelConfig.backgroundType" :options="backgroundTypeOptions" style="width: 160px" size="small" />
+      </div>
       <NUpload
         action="/api/file/uploadImg?fileType=wallpaper"
         :show-file-list="false"
         name="imgfile"
+        :accept="uploadAccept"
         :headers="{
           token: authStore.token as string,
         }"
@@ -224,6 +252,24 @@ function resetPanelConfig() {
       >
         <NUploadDragger style="width: 100%;">
           <div
+            v-if="panelState.panelConfig.backgroundType === 1"
+            class="h-[200px] w-full border bg-slate-100 flex justify-center items-center cursor-pointer rounded-[10px] overflow-hidden"
+          >
+            <video
+              v-if="panelState.panelConfig.backgroundVideoSrc"
+              :src="panelState.panelConfig.backgroundVideoSrc"
+              class="w-full h-full object-cover"
+              autoplay
+              muted
+              loop
+              playsinline
+            />
+            <div v-else class="text-shadow text-white">
+              {{ $t('apps.baseSettings.uploadVideoOrDragText') }}
+            </div>
+          </div>
+          <div
+            v-else
             class="h-[200px] w-full border bg-slate-100 flex justify-center items-center cursor-pointer rounded-[10px]"
             :style="{ background: `url(${panelState.panelConfig.backgroundImageSrc}) no-repeat`, backgroundSize: 'cover' }"
           >
@@ -236,29 +282,40 @@ function resetPanelConfig() {
 
       <div class="flex justify-end mt-2">
         <NButton size="small" quaternary type="info" @click="openWallpaperPicker">
-          选择已上传壁纸（{{ wallpaperCountLabel }}）
+          {{ $t('apps.baseSettings.pickWallpaper') }}（{{ wallpaperCountLabel }}）
         </NButton>
       </div>
 
-      <RoundCardModal v-model:show="wallpaperPickerShow" style="max-width: 900px;" size="small" title="选择已上传壁纸">
+      <RoundCardModal v-model:show="wallpaperPickerShow" style="max-width: 900px;" size="small" :title="$t('apps.baseSettings.pickWallpaper')">
         <div class="min-h-[180px]">
           <div class="flex items-center justify-between mb-2">
             <NButtonGroup size="small">
               <NButton @click="loadWallpaperList" :loading="wallpaperPickerLoading">
-                刷新
+                {{ $t('apps.baseSettings.wallpaperRefresh') }}
               </NButton>
             </NButtonGroup>
           </div>
 
           <NSpin v-show="wallpaperPickerLoading" size="small" />
-          <div v-if="!wallpaperPickerLoading && wallpaperList.length === 0" class="text-slate-500 text-sm">
-            暂无已上传壁纸
+          <div v-if="!wallpaperPickerLoading && filteredWallpaperList.length === 0" class="text-slate-500 text-sm">
+            {{ $t('apps.baseSettings.nothingWallpaper') }}
           </div>
 
           <NGrid v-else cols="2 500:3 800:4" :x-gap="10" :y-gap="10">
-            <NGridItem v-for="(it, idx) in wallpaperList" :key="`wall-pick-${idx}`">
+            <NGridItem v-for="(it, idx) in filteredWallpaperList" :key="`wall-pick-${idx}`">
               <div class="wall-pick-card" @click="handlePickWallpaper(it.src)">
-                <div class="wall-pick-thumb" :style="{ background: `url(${it.src}) center / cover no-repeat` }" />
+                <video
+                  v-if="isVideoFile(it.src)"
+                  class="wall-pick-thumb"
+                  :src="it.src"
+                  muted
+                  loop
+                  playsinline
+                  preload="metadata"
+                  @mouseenter="($event.target as HTMLVideoElement).play()"
+                  @mouseleave="($event.target as HTMLVideoElement).pause()"
+                />
+                <div v-else class="wall-pick-thumb" :style="{ background: `url(${it.src}) center / cover no-repeat` }" />
                 <div class="wall-pick-name">{{ it.fileName }}</div>
               </div>
             </NGridItem>
@@ -271,7 +328,15 @@ function resetPanelConfig() {
         <NSwitch v-model:value="showWallpaperInput" />
       </div>
       <div v-if="showWallpaperInput" class="mt-1">
-        <NInput v-model:value="panelState.panelConfig.backgroundImageSrc" type="text" size="small" clearable />
+        <NInput
+          v-if="panelState.panelConfig.backgroundType === 1"
+          v-model:value="panelState.panelConfig.backgroundVideoSrc"
+          type="text"
+          size="small"
+          clearable
+          :placeholder="$t('apps.baseSettings.videoUrlPlaceholder')"
+        />
+        <NInput v-else v-model:value="panelState.panelConfig.backgroundImageSrc" type="text" size="small" clearable />
       </div>
 
       <div class="flex items-center mt-[10px]">

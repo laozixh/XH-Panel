@@ -40,6 +40,9 @@ declare namespace Panel {
 
     interface panelConfig{
         backgroundImageSrc?:string
+        // 背景类型：0 静态图片，1 动态视频
+        backgroundType?:number
+        backgroundVideoSrc?:string
         backgroundBlur?:number
         backgroundMaskNumber?:number
         iconStyle?:PanelPanelConfigStyleEnum

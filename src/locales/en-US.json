@@ -51,6 +51,9 @@
     },
     "baseSettings": {
       "appName": "Style Settings",
+      "backgroundImage": "Static image",
+      "backgroundType": "Background type",
+      "backgroundVideo": "Video",
       "bottomMargin": "Bottom margin",
       "clock": "Clock component",
       "clockSecondShow": "Show seconds",
@@ -66,6 +69,8 @@
       "mask": "Mask",
       "maxWidth": "Max width",
       "netModeChangeButtonShow": "Show network mode switch button",
+      "nothingWallpaper": "No uploaded wallpaper yet",
+      "pickWallpaper": "Pick an uploaded wallpaper",
       "publicVisitModeShow": "Allow public mode display",
       "resetWarnText": "Are you sure you want to reset these styles?",
       "searchBar": "Search bar component",
@@ -77,8 +82,11 @@
       "textContent": "Text content",
       "topMargin": "Top margin",
       "uploadOrDragText": "Click to upload or drag and drop into the box to replace the image",
+      "uploadVideoOrDragText": "Click to upload a video or drag it into the box (mp4 / webm)",
       "vague": "Blur",
-      "wallpaper": "Wallpaper"
+      "videoUrlPlaceholder": "Video URL, e.g. /uploads/xxx.mp4",
+      "wallpaper": "Wallpaper",
+      "wallpaperRefresh": "Refresh"
     },
     "exportImport": {
       "appName": "Export/Import",
